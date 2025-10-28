@@ -45,7 +45,7 @@ Some portions of the code, including organization, syntax improvements, and comm
 # Installation
   Ensure you have all requirments installed
    * Mac is untested but should work --- Mac Users python3 ---
-   * If Resolution Scaling is Off see [Known Issues](docs/Known_Issues.md)
+   * If Resolution Scaling is Off see [Known Issues](Known_Issues.md)
 
   # Windows, Linux, Mac  
  
