@@ -48,8 +48,7 @@ Some portions of the code, including organization, syntax improvements, and comm
    * If Resolution Scaling is Off see [Known Issues](docs/Known_Issues.md)
 
   # Windows, Linux, Mac
-               
-      - Suggested Method Open the Terminal
+        
           git clone https://github.com/Ac1ne/LHL.git
           cd LHL
           python LHL.py     --- Mac Users python3 LHL.py ---
