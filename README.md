@@ -44,13 +44,13 @@ Some portions of the code, including organization, syntax improvements, and comm
 
 # Installation
   Ensure you have all requirments installed
-   * Mac is untested but should work 
+   * Mac is untested but should work --- Mac Users python3 ---
    * If Resolution Scaling is Off see [Known Issues](docs/Known_Issues.md)
 
-  # Windows, Linux, Mac
+  # Windows, Linux, Mac  
+ 
         
           git clone https://github.com/Ac1ne/LHL.git
           cd LHL
-          python LHL.py     --- Mac Users python3 LHL.py ---
- 
+          python LHL.py     
   
