@@ -6,9 +6,9 @@ Some portions of the code, including organization, syntax improvements, and comm
 
 # Requirements
  
-  git             https://git-scm.com/download/win
-  Python 3.xx     https://www.python.org/downloads/windows
-  PyQT5           pip install PyQt5
+  -git             https://git-scm.com/download/win
+  -Python 3.xx     https://www.python.org/downloads/windows
+  -PyQT5           pip install PyQt5
 
 # Main Functions
   - Create and Manage Log Files Using .JSON format
@@ -44,13 +44,14 @@ Some portions of the code, including organization, syntax improvements, and comm
 
 # Installation
   Ensure you have all requirments installed
-   * Mac is untested but should work --- Mac Users python3 ---
+   * Mac is untested but should work 
    * If Resolution Scaling is Off see [Known Issues](Known_Issues.md)
 
-  # Windows, Linux, Mac  
- 
+  # Windows, Linux, Mac   
         
           git clone https://github.com/Ac1ne/LHL.git
           cd LHL
           python LHL.py     
+          
+  --- Mac Use python3 LHL.py ---
   
