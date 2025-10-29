@@ -54,9 +54,18 @@ Some portions of the code, including organization, syntax improvements, and comm
 
   ### Windows, Linux, Mac   
         
-          git clone https://github.com/Ac1ne/LHL.git
-          cd path to file/LHL
-          python3 LHL.py     
+```
+git clone https://github.com/Ac1ne/LHL.git
+```
+
+```
+cd path_to_file/LHL
+```
+
+```
+python3 LHL.py
+```
+
           
 
   
