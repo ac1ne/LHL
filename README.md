@@ -1,6 +1,8 @@
 # LHL
 LHL Amateur Radio Log: A PyQt5 desktop application to log, manage, and export ham radio contacts with real-time UTC/local time, search, edit, and ADIF export functionality.
 
+![LHL Screenshot](LHL.png)
+
 # AI Disclosure
 Some portions of the code, including organization, syntax improvements, and commenting, were assisted using AI tools. All functional logic and design decisions were created and reviewed by the repository author.
 
