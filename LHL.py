@@ -7,6 +7,7 @@ from PyQt5.QtGui import QFont, QRegExpValidator, QGuiApplication, QIntValidator,
 import datetime
 import json
 import os
+import calendar
 from datetime import timezone
 
 ### DPI setup for monitor resolution 
@@ -26,15 +27,40 @@ class IntegerDelegate(QStyledItemDelegate):
 class TimeDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
         editor = QLineEdit(parent)
-        editor.setInputMask("99:99")
+        editor.setInputMask("00:00")
         return editor
-            
+
+    def setModelData(self, editor, model, index):
+        text = editor.text()
+        if ':' in text:
+            h, m = text.split(":")
+            try:
+                h = max(0, min(23, int(h)))
+                m = max(0, min(59, int(m)))
+                text = f"{h:02d}:{m:02d}"
+            except ValueError:
+                text = "00:00"
+        model.setData(index, text, Qt.EditRole)
 ### Date Format 
 class DateDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
         editor = QLineEdit(parent)
-        editor.setInputMask("9999-99-99")
+        editor.setInputMask("0000-00-00")
         return editor
+
+    def setModelData(self, editor, model, index):
+        text = editor.text()
+        if '-' in text:
+            y, mo, d = text.split("-")
+            try:
+                y = int(y)
+                mo = max(1, min(12, int(mo)))
+                max_day = calendar.monthrange(y, mo)[1]
+                d = max(1, min(max_day, int(d)))
+                text = f"{y:04d}-{mo:02d}-{d:02d}"
+            except ValueError:
+                text = "0000-01-01"
+        model.setData(index, text, Qt.EditRole)
         
 class DateTableWidgetItem(QTableWidgetItem):
     def __lt__(self, other):
@@ -451,7 +477,9 @@ class MainWindow(QMainWindow):
         self.time.setAlignment(Qt.AlignCenter) 
         self.time.setFont(QFont("Arial", 10))
         self.time.setPlaceholderText("HH:MM")
-        self.time.setInputMask("99:99") 
+        self.time.setInputMask("00:00")
+        #self.time.setValidator(QRegExpValidator(QRegExp(r'^(?:[01]?\d|2[0-3]):[0-5]?\d$')))
+        self.time.editingFinished.connect(self.format_time_field)
              
         self.timer_time = QTimer(self)
         self.timer_time.timeout.connect(self.update_time)
@@ -476,7 +504,9 @@ class MainWindow(QMainWindow):
         self.date.setAlignment(Qt.AlignCenter)  
         self.date.setFont(QFont("Arial", 10))
         self.date.setPlaceholderText("yyyy-MM-dd")
-        self.date.setInputMask("9999-99-99") 
+        self.date.setInputMask("0000-00-00")
+        #self.date.setValidator(QRegExpValidator(QRegExp(r'^\d{4}-(0?[1-9]|1[0-2])-(0?[1-9]|[12]\d|3[01])$')))
+        self.date.editingFinished.connect(self.format_date_field)
         
         # Timer for updating the date
         self.timer_date = QTimer(self)
@@ -681,6 +711,22 @@ class MainWindow(QMainWindow):
             if event.key() != Qt.Key_Tab:
                 self.time_update_paused = True
         return super().eventFilter(obj, event)
+    
+    def format_time_field(self):
+        text = self.time.text().strip()
+        if ":" in text:
+            parts = text.split(":")
+            if len(parts) == 2 and all(part.isdigit() for part in parts):
+                h, m = [f"{int(part):02d}" for part in parts]
+                self.time.setText(f"{h}:{m}")
+
+    def format_date_field(self):
+        text = self.date.text().strip()
+        if "-" in text:
+            parts = text.split("-")
+            if len(parts) == 3 and all(part.isdigit() for part in parts):
+                y, mo, d = parts
+                self.date.setText(f"{int(y):04d}-{int(mo):02d}-{int(d):02d}")
 
     def update_time(self):
         if not self.time_update_paused:
