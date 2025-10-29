@@ -8,9 +8,12 @@ Some portions of the code, including organization, syntax improvements, and comm
 
 ## Requirements
  
-  -git             https://git-scm.com/download  
-  -Python 3.xx     https://www.python.org/downloads/windows  
-  -PyQT5           pip install PyQt5
+- **Git:** [https://git-scm.com/download](https://git-scm.com/download)  
+- **Python 3.x:** [https://www.python.org/downloads/](https://www.python.org/downloads/)  
+- **PyQt5:**  
+  ```bash
+  pip install PyQt5
+  
 ### Main Functions
   - Create and Manage Log Files Using .JSON format
   - Record amateur Radio Contacts with Details
