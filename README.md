@@ -6,8 +6,8 @@ Some portions of the code, including organization, syntax improvements, and comm
 
 # Requirements
  
-  -git             https://git-scm.com/download
-  -Python 3.xx     https://www.python.org/downloads/windows
+  -git             https://git-scm.com/download  
+  -Python 3.xx     https://www.python.org/downloads/windows  
   -PyQT5           pip install PyQt5
 
 # Main Functions
