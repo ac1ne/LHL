@@ -3,7 +3,7 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, QLabel, QLineEdit, QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QMessageBox, QWidgetAction, QStyledItemDelegate, QStyle, QMenu, QFileDialog
 from PyQt5.QtCore import Qt, QTimer, QTime, QDate, QRegExp, QFile, QTextStream, QEvent, QDateTime
-from PyQt5.QtGui import QFont, QRegExpValidator, QGuiApplication, QIntValidator, QCursor
+from PyQt5.QtGui import QFont, QRegExpValidator, QGuiApplication, QIntValidator, QCursor, QBrush, QColor
 import datetime
 import json
 import os
@@ -79,8 +79,10 @@ class AlphanumericDelegate(QStyledItemDelegate):
 ### Sets Letters to upper case view only
     def setEditorData(self, editor, index):
         value = index.model().data(index, Qt.EditRole)
-        editor.setText(value.upper())  
-    
+        value = (value or "").upper()  # prevent NoneType error
+
+        editor.setText(value)   
+ 
     def onTextChanged(self, text):        
         editor = self.sender()
         if editor:
@@ -340,13 +342,13 @@ class BlankTableWidget(QTableWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-            
+                    
 ### File related flags
         self.edit_mode = False         
         self.file_created = False
         self.file_loaded = False
         self.time_update_paused = False
-        
+            
 ### Main window properties        
         self.setWindowTitle(" LHL ")
         self.setGeometry(50, 50, 800, 500)  
@@ -449,6 +451,7 @@ class MainWindow(QMainWindow):
         self.log.cellClicked.connect(self.on_cell_clicked)
         self.log.setItemDelegateForColumn(0, HighlightAndDeleteDelegate(self.log))      
         self.log.setSortingEnabled(True) 
+
     ### Local Time
         
         # Local time and date label setup
@@ -644,7 +647,7 @@ class MainWindow(QMainWindow):
         self.clear_search_button.setGeometry(690, 30, 100, 25)  
         self.clear_search_button.setStyleSheet("background-color: #d3d3d3;")
         self.clear_search_button.clicked.connect(self.clear_search)
-        
+       
     ### Done_Edit   
         self.done_button = QPushButton('Done', self)
         self.done_button.setGeometry(390, 400, 75, 25)
@@ -658,7 +661,7 @@ class MainWindow(QMainWindow):
         self.cancel_edit_button.setStyleSheet("background-color: #d3d3d3;")
         self.cancel_edit_button.setVisible(False) 
         self.cancel_edit_button.clicked.connect(self.cancel_edit_mode)
- 
+    
 ## Initialize row count for table
         self.row_count = 0
         
@@ -1116,7 +1119,7 @@ class MainWindow(QMainWindow):
             msg_box.setStandardButtons(QMessageBox.Ok)
 
             def close_message_box():
-                self.edit_mode = False
+                self.edit_mode = False                
                 self.done_button.setVisible(False)
                 self.cancel_edit_button.setVisible(False)
                 self.log.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -1127,7 +1130,6 @@ class MainWindow(QMainWindow):
             msg_box.exec_()
         else:
             self.edit_mode = not self.edit_mode
-
             self.done_button.setVisible(self.edit_mode)
             self.cancel_edit_button.setVisible(self.edit_mode)
 
@@ -1177,8 +1179,7 @@ class MainWindow(QMainWindow):
             else:
             # Refresh the table to reflect the current saved data when exiting edit mode
                 self.reload_current_file() 
-         
-                
+
 ## Cancel Edits             
             
     def cancel_edit_mode(self):
@@ -1240,54 +1241,53 @@ class MainWindow(QMainWindow):
         
     ## Save Edits      
     def save_edits(self):
-    
-    ### Check File Name
+    # Check File Name
         if hasattr(self, 'file_name'):
-        
-    ### Set To Read Write
             with open(self.file_name, 'r+') as file:
                 data = json.load(file)
                 num_rows = self.log.rowCount()
-                save_data = []
-    
-    ### When in Edit Save Reverse Order                      
-                if self.edit_mode:
-                    for row in range(num_rows - 1, -1, -1):
-                        entry = {}
-                        for col in range(self.log.columnCount()):
-                            item = self.log.item(row, col)
-                            if item is not None:
-                                entry[self.log.horizontalHeaderItem(col).text().lower()] = item.text()
-                        save_data.append(entry)
 
-    ### Default Save When Not in Edit Mode 
-                else:
-                    for row in range(num_rows):
-                        entry = {}
-                        for col in range(self.log.columnCount()):
-                            item = self.log.item(row, col)
-                            if item is not None:
-                                entry[self.log.horizontalHeaderItem(col).text().lower()] = item.text()
-                        save_data.append(entry)
-    
-    ### Update Log Entries                                    
-                data['log'] = save_data       
+            # Collect and sort rows by numeric value in column 0 ("#")
+                rows = []
+                for row in range(num_rows):
+                    row_data = []
+                    for col in range(self.log.columnCount()):
+                        item = self.log.item(row, col)
+                        row_data.append(item.text() if item else "")
+                    rows.append(row_data)
+
+            # Sort by the first column (assumed to be numeric)
+                rows.sort(key=lambda x: int(x[0]))
+
+            # Build save_data from sorted rows
+                save_data = []
+                for row_data in rows:
+                    entry = {}
+                    for col, value in enumerate(row_data):
+                        header = self.log.horizontalHeaderItem(col).text().lower()
+                        entry[header] = value
+                    save_data.append(entry)
+
+            # Update log entries
+                data['log'] = save_data
                 data['mycall'] = self.mycall.text()
                 data['grid'] = self.grid.text()
-    
-    ### Write Update                             
+               
+            # Write update
                 file.seek(0)
                 json.dump(data, file, indent=4)
                 file.truncate()
-                
-    ### Reset Read Only / Toggle Edit Mode 
-            self.mycall.setReadOnly(True)
-            self.grid.setReadOnly(True)
-            self.toggle_edit_mode()
-            self.time.setFocus()
-            
-    ### Edits Saved Message 
-            QMessageBox.information(self, "Edits Saved", "Edits have been saved.")
+
+            # Reset Read Only / Toggle Edit Mode
+                self.mycall.setReadOnly(True)
+                self.grid.setReadOnly(True)
+                self.toggle_edit_mode()
+                self.time.setFocus()
+                self.log.sortItems(0, Qt.DescendingOrder)
+
+            # Edits Saved Message
+                QMessageBox.information(self, "Edits Saved", "Edits have been saved.")
+
 
 ## Export adi
     
@@ -1382,7 +1382,6 @@ if __name__ == '__main__':
     mainWindow = MainWindow()
     mainWindow.show()
     sys.exit(app.exec_())
-
 
 
 
