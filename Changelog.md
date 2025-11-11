@@ -1,3 +1,10 @@
+### 2025-11-11
+  - Added notes by clicking on the row number to bring up a context menu. once a note is saved the line number changes color to green for easy identification.
+  - Notes in edit mode are saved in a temperary state until the done button is selected
+  - Deleting a row deletes all associated notes.
+  - added a QRZ web search to the search menu. easily look up call signs entered in the search field.
+  - general improvments to sorting, loading, and saving data
+
 ### 2025-11-05
 ### Editing and Warning Popouts
   - users can now add rows in edit mode the row and the row will be placed in the correct time/date within your log
