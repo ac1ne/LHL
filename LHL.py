@@ -1,17 +1,20 @@
-#  _______________________________________
+﻿#  _______________________________________
 # | Program : LHL an Amateur Radio Log    |
 # | Author : Ac1ne                        |
 # |_______________________________________|
 #
 
+from re import S
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, QLabel, QLineEdit, QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QMessageBox, QWidgetAction, QStyledItemDelegate, QStyle, QMenu, QFileDialog
+from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, QLabel, QLineEdit, QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QMessageBox, QWidgetAction, QStyledItemDelegate, QStyle, QMenu, QFileDialog, QDialog, QVBoxLayout, QTextEdit, QPushButton, QHBoxLayout, QMessageBox
 from PyQt5.QtCore import Qt, QTimer, QTime, QDate, QRegExp, QFile, QTextStream, QEvent, QDateTime
 from PyQt5.QtGui import QFont, QRegExpValidator, QGuiApplication, QIntValidator, QCursor, QBrush, QColor, QPainter
 import datetime
 import json
 import os
 import calendar
+import uuid
+import webbrowser
 from datetime import timezone
 
 ### DPI setup for monitor resolution 
@@ -260,7 +263,91 @@ class HighlightAndDeleteDelegate(QStyledItemDelegate):
             parent_widget = table.parent()
             if parent_widget.edit_mode:
                 parent_widget.show_context_menu(index.row())
-        return False    
+        return False
+
+class NotesDialog(QDialog):
+    def __init__(self, uuid, notes_filename, parent=None):
+        super().__init__(parent)
+        self.uuid = uuid
+        self.notes_filename = notes_filename
+        self.setWindowTitle("Contact Notes")
+        self.setMinimumSize(400, 300)
+
+        self.text_edit = QTextEdit(self)
+        self.text_edit.setStyleSheet("background-color: #d3d3d3; color: black;")
+        self.save_button = QPushButton("Save", self)
+        self.cancel_button = QPushButton("Cancel", self)
+
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.save_button)
+        button_layout.addWidget(self.cancel_button)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.text_edit)
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+
+        self.save_button.clicked.connect(self.save_notes)
+        self.cancel_button.clicked.connect(self.reject)
+
+        self.load_notes()
+
+
+    def load_notes(self):
+        if os.path.exists(self.notes_filename):
+            with open(self.notes_filename, "r") as file:
+                notes_data = json.load(file)
+                self.text_edit.setPlainText(notes_data.get(self.uuid, ""))
+
+
+    def save_notes(self):
+        notes_text = self.text_edit.toPlainText()
+
+        if self.parent() and getattr(self.parent(), "edit_mode", False):
+        # Check if UUID is already in the saved log
+            uuid_exists = False
+            if hasattr(self.parent(), "file_name") and os.path.exists(self.parent().file_name):
+                with open(self.parent().file_name, "r") as log_file:
+                    try:
+                        data = json.load(log_file)
+                        uuid_exists = any(entry.get("uuid") == self.uuid for entry in data.get("log", []))
+                    except Exception:
+                        pass  # fallback to temp save if file is unreadable
+
+            if not uuid_exists:
+            # Save temporarily
+                self.parent().temp_notes_data[self.uuid] = notes_text
+                QMessageBox.information(self, "Saved", "Notes saved successfully.")
+            else:
+            # Save directly to file
+                notes_data = {}
+                if os.path.exists(self.notes_filename):
+                    with open(self.notes_filename, "r") as nf:
+                        notes_data = json.load(nf)
+
+                notes_data[self.uuid] = notes_text
+                with open(self.notes_filename, "w") as nf:
+                    json.dump(notes_data, nf, indent=4)
+
+                QMessageBox.information(self, "Saved", "Notes saved successfully.")
+        else:
+        # Not in edit mode — save directly
+            notes_data = {}
+            if os.path.exists(self.notes_filename):
+                with open(self.notes_filename, "r") as nf:
+                    notes_data = json.load(nf)
+
+            notes_data[self.uuid] = notes_text
+            with open(self.notes_filename, "w") as nf:
+                json.dump(notes_data, nf, indent=4)
+
+            QMessageBox.information(self, "Saved", "Notes saved successfully.")
+
+        self.accept()
+
+        if self.parent():
+            self.parent().update_note_indicator(self.uuid)
+
 
 ## Blocks table focus
 class NoFocusDelegate(QStyledItemDelegate):
@@ -371,6 +458,8 @@ class MainWindow(QMainWindow):
         self.file_loaded = False
         self.time_update_paused = False
         self.original_cell_value = None
+        self.row_uuid_map = {}
+        self.temp_notes_data = {}
         
 ### Main window properties        
         self.setWindowTitle(" LHL ")
@@ -424,7 +513,7 @@ class MainWindow(QMainWindow):
         self.label_mycall.setGeometry(10, 30, 60, 25)                   
 
         self.mycall = QLineEdit(self)
-        self.mycall.setGeometry(65, 30, 75, 25) 
+        self.mycall.setGeometry(55, 30, 75, 25) 
         self.mycall.setStyleSheet("background-color: #d3d3d3;")
         self.mycall.setMaxLength(7)  
         self.mycall.setAlignment(Qt.AlignCenter)  
@@ -434,10 +523,10 @@ class MainWindow(QMainWindow):
         
 ### Grid Square          
         self.label_grid = QLabel("Grid Square: ", self)
-        self.label_grid.setGeometry(150, 30, 75, 25) 
+        self.label_grid.setGeometry(137, 30, 75, 25) 
         
         self.grid = QLineEdit(self)
-        self.grid.setGeometry(230, 30, 60, 25)
+        self.grid.setGeometry(207, 30, 60, 25)
         self.grid.setStyleSheet("background-color: #d3d3d3;")
         self.grid.setMaxLength(7) 
         self.grid.setAlignment(Qt.AlignCenter)  
@@ -447,15 +536,15 @@ class MainWindow(QMainWindow):
 
 ### Create       
         self.create_button = QPushButton("Create", self)
-        self.create_button.setGeometry(300, 30, 75, 25) 
+        self.create_button.setGeometry(277, 30, 75, 25) 
         self.create_button.setStyleSheet("background-color: #d3d3d3;")
-        self.create_button.clicked.connect(self.create_file)
-        
+        self.create_button.clicked.connect(self.create_file)        
 ### Table
         self.log = BlankTableWidget(self)
         self.log.setGeometry(10, 70, 780, 285)  
-        self.log.setColumnCount(11)
-        self.log.setHorizontalHeaderLabels(["#", "Time", "Date", "Call", "Mode", "Band", "Freq", "Tx", "Rx", "Pwr", "QSO"])               
+        self.log.setColumnCount(12)
+        self.log.setHorizontalHeaderLabels(["#", "Time", "Date", "Call", "Mode", "Band", "Freq", "Tx", "Rx", "Pwr", "QSO", "UUID"])
+        self.log.setColumnHidden(11, True) 
         self.log.setColumnWidths({
             0: 50,  
             1: 50,   
@@ -635,7 +724,11 @@ class MainWindow(QMainWindow):
         self.clear_data_button.setGeometry(685, 400, 75, 25)  
         self.clear_data_button.setStyleSheet("background-color: #d3d3d3;")
         self.clear_data_button.clicked.connect(self.clear_data)
-        
+### QRZ
+        self.QRZ_button = QPushButton("QRZ", self)
+        self.QRZ_button.setGeometry(425, 30, 35, 25)  
+        self.QRZ_button.setStyleSheet("background-color: #5A86AD;")
+        self.QRZ_button.clicked.connect(self.open_qrz_page)
        
 ### Search
         self.search = QLineEdit(self)
@@ -680,8 +773,7 @@ class MainWindow(QMainWindow):
         self.add_button.clicked.connect(self.add_row)    
     
 ### Initialize row count for table
-        self.row_count = 0
-        
+        self.row_count = 0        
 ## Key Press Events       
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
@@ -715,7 +807,18 @@ class MainWindow(QMainWindow):
         
     def uppercase_text_search(self, text):
         self.search.setText(text.upper())
-        
+            
+    def show_notes_placeholder(self, row):
+        uuid_item = self.log.item(row, 11)
+        if uuid_item:
+            uuid = uuid_item.text()
+            notes_filename = self.file_name.replace(".json", "_notes.json")
+            dialog = NotesDialog(uuid, notes_filename, self)
+            dialog.exec_()
+        else:
+            QMessageBox.warning(self, "Error", "No UUID found for this row.")
+
+                        
 ### Local Time and Date        
     def update_local_time_date(self):        
         now_local = datetime.datetime.now()
@@ -782,15 +885,22 @@ class MainWindow(QMainWindow):
                    
 ### Delete Row
     def on_cell_clicked(self, row, column):
-        if column == 0 and self.edit_mode:
+        if column == 0:
             self.log.selectRow(row)
             self.show_context_menu(row)
-
+                
     def show_context_menu(self, row):
         menu = QMenu(self)
-        delete_action = QAction("Delete Row", self)
-        delete_action.triggered.connect(lambda: self.show_delete_confirmation_dialog(row))  
-        menu.addAction(delete_action)
+
+        if self.edit_mode:
+            delete_action = QAction("Delete Row", self)
+            delete_action.triggered.connect(lambda: self.show_delete_confirmation_dialog(row))
+            menu.addAction(delete_action)
+                         
+        notes_action = QAction("Notes", self)
+        notes_action.triggered.connect(lambda: self.show_notes_placeholder(row))
+        menu.addAction(notes_action)
+
         menu.exec_(QCursor.pos())
 
     def show_delete_confirmation_dialog(self, row):  
@@ -805,7 +915,46 @@ class MainWindow(QMainWindow):
             self.delete_row(row)
 
     def delete_row(self, row):
+    # Get UUID from the hidden column
+        uuid_item = self.log.item(row, 11)
+        if uuid_item:
+            uuid = uuid_item.text()
+            notes_filename = self.file_name.replace(".json", "_notes.json")
+
+        # Remove note from notes file if it exists
+            if os.path.exists(notes_filename):
+                with open(notes_filename, "r") as file:
+                    notes_data = json.load(file)
+
+                if uuid in notes_data:
+                    del notes_data[uuid]
+                    with open(notes_filename, "w") as file:
+                        json.dump(notes_data, file, indent=4)
+
+    # Remove the row from the table
         self.log.removeRow(row)
+
+
+
+    def update_note_indicator(self, uuid):
+        for row in range(self.log.rowCount()):
+            uuid_item = self.log.item(row, 11)
+            if uuid_item and uuid_item.text() == uuid:
+                line_item = self.log.item(row, 0)
+                if line_item:
+                    base_number = line_item.text().replace("*", "")
+                    line_item.setText(f"{base_number}")
+                    line_item.setForeground(QBrush(QColor("#4CBB17")))  # Light green
+                break
+
+    
+    def open_qrz_page(self):
+        callsign = self.search.text().strip()
+        if not callsign:
+            QMessageBox.warning(self, "Input Error", "Please enter a callsign in the search field.")
+            return
+        url = f"https://www.qrz.com/db/{callsign}"
+        webbrowser.open(url)
 
 ### Table Sorting       
     def enable_sorting_on_user_click(self, index):
@@ -911,7 +1060,9 @@ class MainWindow(QMainWindow):
             self.log.setSortingEnabled(False)
 
 ### Append New Log Entry
+        entry_uuid = str(uuid.uuid4())
         data['log'].append({
+            'uuid': entry_uuid,
             'time': time_text,
             'date': date_text,
             'call': call_text,
@@ -941,6 +1092,12 @@ class MainWindow(QMainWindow):
         self.log.addItemCentered(0, 8, str(rx_text))
         self.log.addItemCentered(0, 9, str(pwr_text))
         self.log.addItemCentered(0, 10, qso_text)
+        
+        uuid_item = QTableWidgetItem(entry_uuid)
+        uuid_item.setTextAlignment(Qt.AlignCenter)
+        self.log.setItem(0, 11, uuid_item)
+
+        
         self.log.setRowHeight(0, 20)
 
 ### Clear Call, Tx, Rx Lines Enable Sorting
@@ -1004,10 +1161,26 @@ class MainWindow(QMainWindow):
                 self.grid.setText(grid)
 
 ### Populate Table Reversed Order
-                for i, entry in enumerate(reversed(log_entries)):            
+                for i, entry in enumerate(reversed(log_entries)):
                     row_position = self.log.rowCount()
                     self.log.insertRow(row_position)
-                    self.log.addItemCentered(row_position, 0, f"{len(log_entries) - i:04d}")
+
+                    uuid = entry.get("uuid", "")
+                    notes_filename = self.file_name.replace(".json", "_notes.json")
+                    has_note = False
+                    if os.path.exists(notes_filename):
+                        with open(notes_filename, "r") as notes_file:
+                            notes_data = json.load(notes_file)
+                            has_note = bool(notes_data.get(uuid, "").strip())
+
+    # Format line number with optional green asterisk
+                    line_number = f"{len(log_entries) - i:04d}" + ("" if has_note else "")
+                    line_item = QTableWidgetItem(line_number)
+                    line_item.setTextAlignment(Qt.AlignCenter)
+                    if has_note:
+                        line_item.setForeground(QBrush(QColor("#4CBB17")))
+                    self.log.setItem(row_position, 0, line_item)
+
                     self.log.addItemCentered(row_position, 1, entry['time'])
                     self.log.addItemCentered(row_position, 2, entry['date'])
                     self.log.addItemCentered(row_position, 3, entry['call'])
@@ -1018,7 +1191,13 @@ class MainWindow(QMainWindow):
                     self.log.addItemCentered(row_position, 8, entry['rx'])
                     self.log.addItemCentered(row_position, 9, entry['pwr'])
                     self.log.addItemCentered(row_position, 10, entry['qso'])
+
+                    uuid_item = QTableWidgetItem(uuid)
+                    uuid_item.setTextAlignment(Qt.AlignCenter)
+                    self.log.setItem(row_position, 11, uuid_item)
+
                     self.log.setRowHeight(row_position, 20)
+                    self.row_uuid_map[row_position] = uuid
                                             
 ### Visibility Create Button
             self.file_loaded = True
@@ -1097,26 +1276,40 @@ class MainWindow(QMainWindow):
         self.log.setSortingEnabled(False)
         row_position = 0
         self.log.insertRow(row_position)
+
+    # Line number cell
         item = QTableWidgetItem("")
         item.setTextAlignment(Qt.AlignCenter)
         item.setForeground(QBrush(QColor("blue")))
         self.log.setItem(row_position, 0, item)
 
+    # Placeholder values for the new row
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         placeholders = [
             now_utc.strftime("%H:%M"), 
             now_utc.strftime("%Y-%m-%d"), 
             "CALL", "SSB", "20m", "14.000", "59", "59", "100", "Sent"
-        ]
+    ]
         for col, value in enumerate(placeholders, start=1):
             placeholder_item = QTableWidgetItem(value)
             placeholder_item.setTextAlignment(Qt.AlignCenter)
             placeholder_item.setForeground(QBrush(QColor("blue"))) 
             self.log.setItem(row_position, col, placeholder_item)
+
+    #  Add a temporary UUID so Notes can be used immediately
+        entry_uuid = str(uuid.uuid4())
+        uuid_item = QTableWidgetItem(entry_uuid)
+        uuid_item.setTextAlignment(Qt.AlignCenter)
+        uuid_item.setForeground(QBrush(QColor("blue")))
+        self.log.setItem(row_position, 11, uuid_item)
+
+    # Optionally store it in the row_uuid_map if needed
+        self.row_uuid_map[row_position] = entry_uuid
             
 ## Editing             
     def toggle_edit_mode(self):
         if not self.file_loaded and not self.file_created:
+            msg_box = QMessageBox(self)
             msg_box = QMessageBox(self)
             msg_box.setWindowTitle("Error")
             msg_box.setText("No file loaded. Load a file first.")
@@ -1200,7 +1393,8 @@ class MainWindow(QMainWindow):
         if not hasattr(self, 'file_name') or not self.file_name:
             return    
         self.reload_current_file()
-        self.toggle_edit_mode()        
+        self.toggle_edit_mode()
+        self.temp_notes_data.clear()
         QMessageBox.information(self, "Edit Mode", "Changes reverted")
 
     def reload_current_file(self):
@@ -1209,11 +1403,28 @@ class MainWindow(QMainWindow):
                 data = json.load(file)
             self.log.setSortingEnabled(False)
             self.log.setRowCount(0)
-            
-            for i, entry in enumerate(reversed(data['log'])):            
+
+            for i, entry in enumerate(reversed(data['log'])):
                 row_position = self.log.rowCount()
                 self.log.insertRow(row_position)
-                self.log.addItemCentered(row_position, 0, f"{len(data['log']) - i:04d}")
+
+                uuid = entry.get("uuid", "")
+                notes_filename = self.file_name.replace(".json", "_notes.json")
+                has_note = False
+                if os.path.exists(notes_filename):
+                    with open(notes_filename, "r") as notes_file:
+                        notes_data = json.load(notes_file)
+                        has_note = bool(notes_data.get(uuid, "").strip())
+
+    # Format line number with optional green asterisk
+                line_number = f"{len(data['log']) - i:04d}" + ("" if has_note else "")
+                line_item = QTableWidgetItem(line_number)
+                line_item.setTextAlignment(Qt.AlignCenter)
+
+                if has_note:
+                    line_item.setForeground(QBrush(QColor("#4CBB17")))
+                self.log.setItem(row_position, 0, line_item)
+            
                 self.log.addItemCentered(row_position, 1, entry['time'])
                 self.log.addItemCentered(row_position, 2, entry['date'])
                 self.log.addItemCentered(row_position, 3, entry['call'])
@@ -1224,6 +1435,11 @@ class MainWindow(QMainWindow):
                 self.log.addItemCentered(row_position, 8, entry['rx'])
                 self.log.addItemCentered(row_position, 9, entry['pwr'])
                 self.log.addItemCentered(row_position, 10, entry['qso'])
+               
+                uuid_item = QTableWidgetItem(entry.get("uuid", ""))
+                uuid_item.setTextAlignment(Qt.AlignCenter)
+                self.log.setItem(row_position, 11, uuid_item)
+
                 self.log.setRowHeight(row_position, 20)
 
             self.log.setSortingEnabled(True)
@@ -1269,6 +1485,7 @@ class MainWindow(QMainWindow):
                     rows.append((row_datetime, row_data))
                 rows.sort(key=lambda x: x[0])
                 self.log.setRowCount(0)
+                
                 save_data = []
                 for i, (dt, row_data) in enumerate(rows):
                     self.log.insertRow(i)
@@ -1277,23 +1494,58 @@ class MainWindow(QMainWindow):
                     item.setTextAlignment(Qt.AlignCenter)
                     self.log.setItem(i, 0, item)
 
-                    entry = {}
-                    for col, value in enumerate(row_data[1:], start=1):
-                        cell_item = QTableWidgetItem(value)
-                        cell_item.setTextAlignment(Qt.AlignCenter)
-                        self.log.setItem(i, col, cell_item)
-                        header = self.log.horizontalHeaderItem(col).text().lower()
-                        entry[header] = value
-                    entry['#'] = row_id
+    # Extract UUID from original row_data
+                    original_uuid = row_data[-1] if len(row_data) > 11 else str(uuid.uuid4())
+                    self.row_uuid_map[i] = original_uuid
+
+                    entry = {
+                        'uuid': original_uuid,
+                        'time': row_data[1],
+                        'date': row_data[2],
+                        'call': row_data[3],
+                        'mode': row_data[4],
+                        'band': row_data[5],
+                        'freq': row_data[6],
+                        'tx': row_data[7],
+                        'rx': row_data[8],
+                        'pwr': row_data[9],
+                        'qso': row_data[10]
+                    }
+
+    # Reapply UUID to table
+                    uuid_item = QTableWidgetItem(original_uuid)
+                    uuid_item.setTextAlignment(Qt.AlignCenter)
+                    self.log.setItem(i, 11, uuid_item)
+
                     save_data.append(entry)
+
 
 ### Update JSON data
                 data['log'] = save_data
                 data['mycall'] = self.mycall.text()
                 data['grid'] = self.grid.text()
+                
+ # Save any temporary notes
+                notes_filename = self.file_name.replace(".json", "_notes.json")
+                notes_data = {}
+                if os.path.exists(notes_filename):
+                    with open(notes_filename, "r") as notes_file:
+                        notes_data = json.load(notes_file)
+
+    # Merge temporary notes
+                notes_data.update(self.temp_notes_data)
+
+                with open(notes_filename, "w") as notes_file:
+                    json.dump(notes_data, notes_file, indent=4)
+
+    # Clear temp notes
+                self.temp_notes_data.clear()
+
+    # Now safe to write to the original log file
                 file.seek(0)
                 json.dump(data, file, indent=4)
                 file.truncate()
+
 
 ### Reset UI
             self.mycall.setReadOnly(True)
@@ -1338,7 +1590,7 @@ class MainWindow(QMainWindow):
         
 ### ADIF Header  
             adi_data = "ADIF Export from LHL Amateur Log 1.0\n"
-            adi_data += "Written by Samuel Busenbark\n"
+            adi_data += f"Written by: {os.path.splitext(os.path.basename(self.file_name))[0]}\n"
             adi_data += f"Log exported on: {QDateTime.currentDateTimeUtc().toString('yyyy-MM-dd HH:mm:ss')} UTC\n"
             adi_data += "<EOH>\n\n"
 
